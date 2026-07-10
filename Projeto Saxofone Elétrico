@@ -1,0 +1,36 @@
+      Ficheiro Principal – Main.ino
+Constitui um simples ciclo de execução do programa:
+•	Função “Setup”: Limita-se a invocar a configuração global do projeto;
+•	Função “loop”:  Executa de forma contínua a chamada de quatro rotinas do sistema: leitura do sensor de pressão (AtualizarEstadoSopro), leitura e descodificação das chaves lidas pelo expansor (AtualizarNotaDecAtual), passagem do valor decimal para uma string com o nome do ficheiro correspondente (AtualizarNotaFicheiroAtual) e o controlo das amostras para a DAC (GerirAudioDAC).
+      
+      Configuração Geral – Setup.ino
+Do ponto de vista da compilação, o processador SAMD21 do Arduino MKR Zero une fisicamente todos os ficheiros num documento temporário antes de efetuar a compilação. Esse processo obedece a uma regra fixa: o compilador compila inicialmente o ficheiro principal que dá nome ao sketch (neste projeto, o ficheiro Setup.ino) e, subsequentemente, anexa os restantes ficheiros por ordem alfabética.
+O Setup.ino centraliza toda a infraestrutura de dados, diretivas de compilação, definições globais e a inicialização dos periféricos:
+•	Inclusões e diretivas: Inclui todas as bibliotecas estruturais para o barramento I2C, barramento SPI e para o sistema de ficheiros do cartão de memória;
+•	Constantes de calibração: Define os pinos físicos do Arduino, limites de tensão analógica, limiares de histerese do sopro tal como as variáveis booleanas para ativação do modo de depuração do Serial Monitor (DEBUG);
+•	Variáveis de estado global: Declara variáveis partilhadas que contêm a intensidade do sopro, valor decimal do teclado e as string com o nome dos ficheiros;
+•	Função “SetupProjeto”: Configura a taxa de transmissão para o monitor serial, inicializa os barramentos I2C e SPI, configura a resolução da DAC nativa do microcontrolador;
+
+      Ficheiro da Gestão do Sensor de Sopro – Sensor_Sopro.ino
+Contém todos os algoritmos responsáveis pela monitorização e tratamento dos dados do sopro introduzidos pelo utilizador:
+•	Função “LerMediaSopro”: Aplica um algoritmo de média aritmética baseado num número de amostras consecutivas, este serve para atenuar possíveis ruídos vindos do sensor ou sopro indesejado do utilizador.
+Por outro lado, um elevado número de amostras para o cálculo da média introduz latência do sensor e influencia negativamente a expressividade do músico devido ao facto de atenuar os transientes rápidos do sopro, diluindo a articulação do músico;
+•	Função “LerTensaoSopro” e “LerPercentagemSopro”: Converte a leitura digital da ADC para o valor de tensão equivalente e mapeia esse valor de forma linear numa escala percentual;
+•	Função “AtualizarEstadoSopro”: Atualiza a variável global de intensidade e dita se o sopro é valido ou não (aplicando a janela de histerese).
+
+      Ficheiro da Leitura do Teclado – Leitura_Chaves.ino
+Gere toda a lógica de comunicação através do protocolo I2C com os dois expansores:
+•	Funções “EscreveMCP” e “InicializarMCP”: Envia sequencialmente os comandos para configurar a direção dos dados e ativar as resistências pull-up internas;
+•	Função “Ler16BitsMCP”: Aponta para o registo GPIOA de um determinado integrado e executa o pedido de leitura sequencial de 2 bytes (Porto A e B);
+•	Funções “LerComboioBruto” e “Inverter32Bits”: Reúne as duas leituras da função anterior e através do deslocamento de bits forma uma palavra de 32 bits aplicando por fim uma inversão da lógica, gerando um código decimal limpo.
+
+      Ficheiro do Mapeamento Cromático – Mapeamento_Notas.ino
+Atua como uma tabela que relaciona a eletrónica com a reprodução do som:
+•	Função “ObterNomeNota”: Implementa uma estrutura condicional “switch-case” alimentada pela variável transmitida do ficheiro do teclado. Este avalia o número gerado e devolve uma string contendo o nome do ficheiro correspondente ao que se encontra no cartão SD.
+
+      Ficheiro do Controlo de Áudio – Audio_DAC.ino
+Por fim, este ficheiro contém os algoritmos com maior exigência do sistema, gerindo buffers e os periféricos do som em background.
+•	Função “TC5_Handler”: É uma rotina de interrupção do timer de hardware. Extrai continuamente as amostra de áudio do buffer e escreve-as diretamente no registo de dados da DAC à taxa de 44.1kHz. Contém também o cálculo com o deslocamento de bits para a atenuação linear do volume Fade Out;
+•	Função “LerAmostrasAtualWav”:  Lê de forma constante os bytes do ficheiro de áudio que está a ser reproduzido atualmente;
+•	Funções “IniciarFicheiroDAC” e “EncherBufferAudio”: Tratam da abertura do ficheiro .wav ignorando o cabeçalho e alimenta continuamente o buffer no programa principal enquanto o timer  consome os dados em background;
+•	Função “GerirAudioDAC”: Atua como cérebro do loop principal, garante que os ficheiros são fechados de forma segura, analisa se o sopro é valido ou se houve alguma alteração na sua intensidade, verifica também se houve atualização na nota atual sendo responsável pela reprodução pelo novo ficheiro em caso de mudança.
